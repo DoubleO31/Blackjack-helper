@@ -5,9 +5,10 @@ interface StrategyCardProps {
   recommendation: "HIT" | "STAND" | "DOUBLE" | "SPLIT" | "SURRENDER" | null;
   reasoning?: string;
   isLoading?: boolean;
+  compact?: boolean;
 }
 
-export function StrategyCard({ recommendation, reasoning, isLoading }: StrategyCardProps) {
+export function StrategyCard({ recommendation, reasoning, isLoading, compact }: StrategyCardProps) {
   const getColors = (rec: string | null) => {
     switch (rec) {
       case "HIT": return "bg-green-600 text-white border-green-400";
@@ -19,43 +20,51 @@ export function StrategyCard({ recommendation, reasoning, isLoading }: StrategyC
     }
   };
 
+  const containerSize = compact
+    ? "rounded-xl p-3 border-2 shadow-lg"
+    : "rounded-2xl p-8 border-4 shadow-2xl";
+  const titleSize = compact ? "text-2xl" : "text-5xl";
+  const bodySize = compact ? "text-xs" : "text-lg";
+  const minHeight = compact ? "min-h-[80px]" : "min-h-[140px]";
+
   return (
     <motion.div
       initial={{ scale: 0.9, opacity: 0 }}
       animate={{ scale: 1, opacity: 1 }}
       className={cn(
-        "relative overflow-hidden rounded-2xl p-8 text-center border-4 shadow-2xl transition-all duration-300",
+        "relative overflow-hidden text-center transition-all duration-300",
+        containerSize,
         getColors(recommendation)
       )}
     >
-      <div className="relative z-10 flex flex-col items-center justify-center min-h-[140px]">
+      <div className={cn("relative z-10 flex flex-col items-center justify-center", minHeight)}>
         {isLoading ? (
           <div className="animate-pulse flex flex-col items-center">
-            <div className="h-8 w-32 bg-current/20 rounded mb-4" />
-            <div className="h-4 w-48 bg-current/10 rounded" />
+            <div className={cn("bg-current/20 rounded mb-3", compact ? "h-5 w-20" : "h-8 w-32")} />
+            <div className={cn("bg-current/10 rounded", compact ? "h-3 w-24" : "h-4 w-48")} />
           </div>
         ) : recommendation ? (
           <>
             <motion.h2 
               initial={{ y: 20, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
-              className="text-5xl font-black tracking-wider font-display uppercase drop-shadow-md"
+              className={cn("font-black tracking-wider font-display uppercase drop-shadow-md", titleSize)}
             >
               {recommendation}
             </motion.h2>
-            {reasoning && (
+            {reasoning && !compact && (
               <motion.p 
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 0.9 }}
                 transition={{ delay: 0.1 }}
-                className="mt-3 text-lg font-medium opacity-90 max-w-md mx-auto"
+                className={cn("mt-2 font-medium opacity-90 max-w-md mx-auto", bodySize)}
               >
                 {reasoning}
               </motion.p>
             )}
           </>
         ) : (
-          <div className="text-muted-foreground/50 font-display text-2xl uppercase tracking-widest">
+          <div className={cn("text-muted-foreground/50 font-display uppercase tracking-widest", compact ? "text-xs" : "text-2xl")}>
             Awaiting Deal...
           </div>
         )}

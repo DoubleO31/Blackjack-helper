@@ -148,11 +148,11 @@ export default function Session() {
       </header>
 
       {/* Main Game Area */}
-      <main className="flex-1 p-4 space-y-6">
-        {/* Hands Row */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+      <main className="flex-1 p-4">
+        {/* Hands + Advice Row */}
+        <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] gap-3 items-start">
           {/* Dealer Area */}
-          <section className="flex flex-col items-center justify-center space-y-2 min-h-[140px]">
+          <section className="flex flex-col items-center justify-center space-y-2 min-h-[140px] sm:max-w-[160px]">
             <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Dealer</span>
             <div onClick={() => setActiveInput("dealer")}>
               {dealerCard ? (
@@ -166,8 +166,26 @@ export default function Session() {
             </div>
           </section>
 
+          {/* Strategy Display - Center */}
+          <section className="flex items-center justify-center sm:justify-center">
+            <div className="w-28 sm:w-32">
+              {dealerCard && playerCards.length >= 2 ? (
+                <StrategyCard 
+                  recommendation={strategy?.recommendation || null} 
+                  reasoning={strategy?.reasoning}
+                  isLoading={isCalculating}
+                  compact
+                />
+              ) : (
+                <div className="h-20 rounded-xl bg-white/5 border border-dashed border-white/10 flex items-center justify-center text-muted-foreground text-[10px] uppercase tracking-widest px-3 text-center">
+                  Deal cards
+                </div>
+              )}
+            </div>
+          </section>
+
           {/* Player Area */}
-          <section className="flex flex-col items-center space-y-2">
+          <section className="flex flex-col items-center space-y-2 sm:max-w-[200px]">
             <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Player</span>
             <div className="flex flex-wrap justify-center gap-2 sm:gap-3 min-h-[120px]">
               {playerCards.map((card, i) => (
@@ -182,21 +200,6 @@ export default function Session() {
             </div>
           </section>
         </div>
-
-        {/* Strategy Display - Central Focus */}
-        <section className="w-full max-w-sm mx-auto">
-          {dealerCard && playerCards.length >= 2 ? (
-            <StrategyCard 
-              recommendation={strategy?.recommendation || null} 
-              reasoning={strategy?.reasoning}
-              isLoading={isCalculating}
-            />
-          ) : (
-            <div className="h-28 rounded-2xl bg-white/5 border border-dashed border-white/10 flex items-center justify-center text-muted-foreground text-xs uppercase tracking-widest px-4 text-center">
-              Deal cards for advice
-            </div>
-          )}
-        </section>
       </main>
 
       {/* Controls Area - Fixed Bottom Sheet */}
