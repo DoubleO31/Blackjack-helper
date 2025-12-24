@@ -140,12 +140,8 @@ function canSplit(cards: string[], rules: Ruleset, opts: EvalOptions): boolean {
   const { isPair } = handTotals(cards);
   if (!isPair || !opts.canSplit) return false;
   if (opts.splitHandsUsed >= opts.maxSplitHands) return false;
-  if (cards[0] === "A" && !rules.hitSplitAces && opts.splitHandsUsed >= opts.maxSplitHands - 1) {
-    // if we can't draw more cards on split aces and already at max, disallow
-    return false;
-  }
-  if (cards[0] === "A" && !rules.resplitAces && opts.splitHandsUsed >= 1) {
-    // no resplit aces beyond first
+  if (cards[0] === "A" && !rules.resplitAces && opts.isSplitAces) {
+    // no resplit of aces beyond the first split
     return false;
   }
   return true;
