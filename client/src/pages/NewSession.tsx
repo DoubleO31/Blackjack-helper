@@ -127,7 +127,11 @@ export default function NewSession() {
             >
               <option value="flat">Flat (1u)</option>
               <option value="mini_paroli">Mini-Paroli 1-2-4</option>
-              <option value="dalembert">d'Alembert</option>
+              <option value="oscar">Oscar&apos;s Grind</option>
+              <option value="dalembert">d&apos;Alembert</option>
+              <option value="martingale_lite">Martingale Lite (2-step)</option>
+              <option value="fibonacci_lite">Fibonacci Lite</option>
+              <option value="one_three_two_six">1-3-2-6</option>
             </select>
           </div>
         </section>

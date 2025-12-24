@@ -2,10 +2,24 @@ import { Ruleset } from "@shared/schema";
 
 export type Recommendation = "HIT" | "STAND" | "DOUBLE" | "SPLIT" | "SURRENDER";
 
-interface StrategyResult {
-  recommendation: Recommendation;
+type DealerDist = Record<number, number>; // total -> probability
+
+interface EvalOptions {
+  canDouble: boolean;
+  canSplit: boolean;
+  splitHandsUsed: number;
+  maxSplitHands: number;
+  isSplitAces: boolean;
+}
+
+interface EvalResult {
+  ev: number;
+  action: Recommendation;
   reasoning: string;
 }
+
+const RANKS = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
+const PROB = 1 / RANKS.length; // infinite deck assumption
 
 function cardValue(card: string): number {
   if (["J", "Q", "K"].includes(card)) return 10;
@@ -13,178 +27,285 @@ function cardValue(card: string): number {
   return parseInt(card, 10);
 }
 
-function getDealerValue(card: string): number {
-  return cardValue(card);
+function isTenValue(card: string): boolean {
+  return ["10", "J", "Q", "K"].includes(card);
 }
 
-function getHandInfo(cards: string[]) {
-  const values = cards.map(cardValue);
-  const hasAce = cards.includes("A");
-  let total = values.reduce((sum, v) => sum + v, 0);
-
-  // Convert aces from 11 to 1 until not bust
-  let acesAsEleven = cards.filter((c) => c === "A").length;
-  while (total > 21 && acesAsEleven > 0) {
+function handTotals(cards: string[]) {
+  let total = 0;
+  let softAces = 0;
+  for (const c of cards) {
+    const v = cardValue(c);
+    total += v;
+    if (c === "A") softAces += 1;
+  }
+  while (total > 21 && softAces > 0) {
     total -= 10;
-    acesAsEleven -= 1;
+    softAces -= 1;
+  }
+  const isSoft = softAces > 0 && total <= 21;
+  const isPair = cards.length === 2 && cards[0] === cards[1];
+  return { total, isSoft, isPair, softAces };
+}
+
+// Dealer distribution with infinite deck approximation
+function dealerDistribution(upcard: string, rules: Ruleset): DealerDist {
+  const cache = dealerDistributionCache[rules.isH17 ? "H17" : "S17"];
+  const cached = cache.get(upcard);
+  if (cached) return cached;
+
+  const dist = rollDealer(cardValue(upcard), upcard === "A", rules.isH17);
+  cache.set(upcard, dist);
+  return dist;
+}
+
+const dealerDistributionCache: Record<"H17" | "S17", Map<string, DealerDist>> = {
+  H17: new Map(),
+  S17: new Map(),
+};
+
+function rollDealer(total: number, upcardAce: boolean, isH17: boolean): DealerDist {
+  const results: DealerDist = {};
+
+  function hitDealer(currentTotal: number, softAces: number, prob: number) {
+    // adjust for soft aces
+    while (currentTotal > 21 && softAces > 0) {
+      currentTotal -= 10;
+      softAces -= 1;
+    }
+
+    const isSoft = softAces > 0;
+    if (currentTotal >= 17 && (!isSoft || !isH17)) {
+      results[currentTotal] = (results[currentTotal] || 0) + prob;
+      return;
+    }
+    if (currentTotal >= 18 && isSoft && isH17) {
+      results[currentTotal] = (results[currentTotal] || 0) + prob;
+      return;
+    }
+
+    for (const r of RANKS) {
+      let nextTotal = currentTotal + cardValue(r);
+      let nextSoft = softAces + (r === "A" ? 1 : 0);
+      hitDealer(nextTotal, nextSoft, prob * PROB);
+    }
   }
 
-  const isSoft = hasAce && total <= 21 && acesAsEleven > 0;
-  const isPair = cards.length === 2 && cards[0] === cards[1];
+  const startingSoft = upcardAce ? 1 : 0;
+  hitDealer(total, startingSoft, 1);
 
-  return { total, isSoft, isPair, firstCardValue: values[0] };
+  return results;
 }
 
-function canDouble(total: number, cards: string[], rules?: Ruleset) {
-  if (!rules) return true;
+function standEV(playerTotal: number, dealerDist: DealerDist): number {
+  let ev = 0;
+  for (const [tStr, p] of Object.entries(dealerDist)) {
+    const dealerTotal = Number(tStr);
+    if (dealerTotal > 21) {
+      ev += p * 1;
+    } else if (playerTotal > dealerTotal) {
+      ev += p * 1;
+    } else if (playerTotal < dealerTotal) {
+      ev += p * -1;
+    } else {
+      // push
+      ev += 0;
+    }
+  }
+  return ev;
+}
+
+function canDouble(cards: string[], rules: Ruleset, isSplit: boolean): boolean {
   if (cards.length !== 2) return false;
+  if (isSplit && !rules.canDoubleAfterSplit) return false;
   switch (rules.doubleRule) {
     case "none":
       return false;
     case "any_two":
       return true;
-    case "nine_to_eleven":
+    case "nine_to_eleven": {
+      const { total } = handTotals(cards);
       return total >= 9 && total <= 11;
-    case "ten_to_eleven":
+    }
+    case "ten_to_eleven": {
+      const { total } = handTotals(cards);
       return total >= 10 && total <= 11;
+    }
     default:
       return true;
   }
 }
 
-function maybeSurrender(total: number, dealer: number, cards: string[], rules?: Ruleset): Recommendation | null {
-  if (!rules || rules.surrender !== "late") return null;
-  if (cards.length !== 2) return null;
-  if (total === 16 && [9, 10, 11].includes(dealer)) return "SURRENDER";
-  if (total === 15 && dealer === 10) return "SURRENDER";
-  return null;
+function canSplit(cards: string[], rules: Ruleset, opts: EvalOptions): boolean {
+  const { isPair } = handTotals(cards);
+  if (!isPair || !opts.canSplit) return false;
+  if (opts.splitHandsUsed >= opts.maxSplitHands) return false;
+  if (cards[0] === "A" && !rules.hitSplitAces && opts.splitHandsUsed >= opts.maxSplitHands - 1) {
+    // if we can't draw more cards on split aces and already at max, disallow
+    return false;
+  }
+  if (cards[0] === "A" && !rules.resplitAces && opts.splitHandsUsed >= 1) {
+    // no resplit aces beyond first
+    return false;
+  }
+  return true;
 }
 
-function pairStrategy(card: string, dealer: number, rules?: Ruleset): Recommendation {
-  // Basic multi-deck DAS-friendly defaults with minor adjustments by rule toggles
-  switch (card) {
-    case "A":
-      return "SPLIT";
-    case "K":
-    case "Q":
-    case "J":
-    case "10":
-      return "STAND";
-    case "9":
-      return [2, 3, 4, 5, 6, 8, 9].includes(dealer) ? "SPLIT" : "STAND";
-    case "8":
-      return "SPLIT";
-    case "7":
-      return dealer <= 7 ? "SPLIT" : "HIT";
-    case "6": {
-      // Split 6s vs 3-6 always; vs 2 only when DAS is allowed
-      if (dealer >= 3 && dealer <= 6) return "SPLIT";
-      if (dealer === 2 && rules?.canDoubleAfterSplit) return "SPLIT";
-      return "HIT";
-    }
-    case "5": {
-      // Treat as hard 10
-      return hardStrategy(10, dealer, true, rules);
-    }
-    case "4":
-      return rules?.canDoubleAfterSplit && (dealer === 5 || dealer === 6) ? "SPLIT" : "HIT";
-    case "3":
-    case "2":
-      return dealer >= 2 && dealer <= 7 ? "SPLIT" : "HIT";
-    default:
-      return "HIT";
-  }
+function blackjackPayoutFactor(rules: Ruleset): number {
+  const payout = rules.blackjackPayout || "3:2";
+  if (payout === "6:5") return 6 / 5;
+  if (payout === "1:1") return 1;
+  return 3 / 2;
 }
 
-function softStrategy(total: number, dealer: number, cards: string[], rules?: Ruleset): Recommendation {
-  switch (total) {
-    case 20:
-      return "STAND";
-    case 19:
-      if (dealer === 6 && canDouble(total, cards, rules)) return "DOUBLE";
-      return "STAND";
-    case 18:
-      if ([3, 4, 5, 6].includes(dealer) && canDouble(total, cards, rules)) return "DOUBLE";
-      if ([2, 7, 8].includes(dealer)) return "STAND";
-      if (dealer === 11) {
-        // Against Ace, stand on S17 games; hit on H17 games
-        return rules?.isH17 ? "HIT" : "STAND";
-      }
-      return "HIT";
-    case 17:
-      if ([3, 4, 5, 6].includes(dealer) && canDouble(total, cards, rules)) return "DOUBLE";
-      return "HIT";
-    case 16:
-    case 15:
-      if ([4, 5, 6].includes(dealer) && canDouble(total, cards, rules)) return "DOUBLE";
-      return "HIT";
-    case 14:
-    case 13:
-      if ([5, 6].includes(dealer) && canDouble(total, cards, rules)) return "DOUBLE";
-      return "HIT";
-    default:
-      return "HIT";
-  }
+// Probability dealer has blackjack given upcard (infinite deck assumption)
+function dealerBlackjackProb(upcard: string): number {
+  if (upcard === "A") return 4 / 13; // need ten-value
+  if (isTenValue(upcard)) return 1 / 13; // need ace
+  return 0;
 }
 
-function hardStrategy(total: number, dealer: number, isTwoCard: boolean, rules?: Ruleset): Recommendation {
-  // Surrender handled separately
-  if (total >= 17) return "STAND";
-  if (total === 16) return dealer >= 7 ? "HIT" : "STAND";
-  if (total === 15) return dealer >= 7 ? "HIT" : "STAND";
-  if (total >= 13 && total <= 14) return dealer >= 7 ? "HIT" : "STAND";
-  if (total === 12) return dealer >= 4 && dealer <= 6 ? "STAND" : "HIT";
-  if (total === 11) return canDouble(total, isTwoCard ? ["X", "X"] : [], rules) ? "DOUBLE" : "HIT";
-  if (total === 10) {
-    if (dealer <= 9 && canDouble(total, isTwoCard ? ["X", "X"] : [], rules)) return "DOUBLE";
-    return "HIT";
-  }
-  if (total === 9) {
-    const allowDouble = canDouble(total, isTwoCard ? ["X", "X"] : [], rules);
-    if (allowDouble && dealer >= 3 && dealer <= 6) return "DOUBLE";
-    if (allowDouble && rules?.doubleRule === "any_two" && dealer === 2) return "DOUBLE";
-    return "HIT";
-  }
-  if (total <= 8) return "HIT";
-  return "HIT";
-}
-
+// Main EV solver
 export function calculateStrategy(
-  dealerCard: string,
+  dealerUpCard: string,
   playerCards: string[],
   ruleset?: Ruleset,
-): StrategyResult {
-  const dealer = getDealerValue(dealerCard);
-  const { total, isSoft, isPair } = getHandInfo(playerCards);
+): { recommendation: Recommendation; reasoning: string } {
+  const rules: Ruleset = ruleset ?? {
+    id: 0,
+    name: "Default",
+    decks: 6,
+    isH17: true,
+    doubleRule: "any_two",
+    canDoubleAfterSplit: true,
+    maxSplitHands: 4,
+    resplitAces: false,
+    hitSplitAces: false,
+    surrender: "none",
+    blackjackPayout: "3:2",
+  };
+  const dealerDist = dealerDistribution(dealerUpCard, rules);
 
-  // Surrender checks
-  const surrender = maybeSurrender(total, dealer, playerCards, ruleset);
-  if (surrender) {
-    return {
-      recommendation: "SURRENDER",
-      reasoning: "Late surrender optimal for this matchup.",
-    };
+  const memo = new Map<string, EvalResult>();
+  const result = bestAction(playerCards, {
+    canDouble: true,
+    canSplit: true,
+    splitHandsUsed: 1, // starting hand counts as 1
+    maxSplitHands: rules.maxSplitHands || 4,
+    isSplitAces: false,
+  });
+
+  function bestAction(cards: string[], opts: EvalOptions): EvalResult {
+    const key = `${cards.slice().sort().join(",")}|${opts.canDouble}|${opts.canSplit}|${opts.splitHandsUsed}|${opts.isSplitAces}`;
+    const cached = memo.get(key);
+    if (cached) return cached;
+
+    const { total, isSoft, isPair } = handTotals(cards);
+
+    // Bust check
+    if (total > 21) {
+      const res = { ev: -1, action: "HIT" as Recommendation, reasoning: "Busted." };
+      memo.set(key, res);
+      return res;
+    }
+
+    // Natural blackjack
+    if (cards.length === 2 && total === 21) {
+      const pDealerBJ = dealerBlackjackProb(dealerUpCard);
+      const factor = blackjackPayoutFactor(rules);
+      const ev = (1 - pDealerBJ) * factor; // push on dealer BJ
+      const res = { ev, action: "STAND" as Recommendation, reasoning: "Natural blackjack." };
+      memo.set(key, res);
+      return res;
+    }
+
+    // Stand EV
+    const standVal = standEV(total, dealerDist);
+    let best: EvalResult = { ev: standVal, action: "STAND", reasoning: "Standing EV vs dealer distribution." };
+
+    // Surrender (late only, first decision)
+    if (rules.surrender === "late" && cards.length === 2) {
+      const surrenderVal = -0.5;
+      if (surrenderVal > best.ev) {
+        best = { ev: surrenderVal, action: "SURRENDER", reasoning: "Late surrender yields better EV." };
+      }
+    }
+
+    // Hit EV (unless split aces with no hits allowed)
+    if (!(opts.isSplitAces && !rules.hitSplitAces)) {
+      const hitVal = RANKS.reduce((acc, r) => {
+        const next = [...cards, r];
+        const child = bestAction(next, {
+          ...opts,
+          canDouble: false, // no doubling after hit
+          canSplit: false, // no splitting after hit
+          isSplitAces: opts.isSplitAces,
+        });
+        return acc + PROB * child.ev;
+      }, 0);
+      if (hitVal > best.ev) {
+        best = { ev: hitVal, action: "HIT", reasoning: "Hitting yields higher EV." };
+      }
+    }
+
+    // Double EV
+    if (opts.canDouble && canDouble(cards, rules, opts.isSplitAces)) {
+      const doubleVal = RANKS.reduce((acc, r) => {
+        const next = [...cards, r];
+        const { total: t } = handTotals(next);
+        if (t > 21) {
+          return acc + PROB * -2; // bust after double
+        }
+        const standAfter = standEV(t, dealerDist);
+        return acc + PROB * (2 * standAfter);
+      }, 0);
+      if (doubleVal > best.ev) {
+        best = { ev: doubleVal, action: "DOUBLE", reasoning: "Doubling once then standing has best EV." };
+      }
+    }
+
+    // Split EV
+    if (isPair && canSplit(cards, rules, opts)) {
+      const rank = cards[0];
+      const nextSplitHandsUsed = Math.min(opts.maxSplitHands, opts.splitHandsUsed + 1);
+
+      const splitHandEV = RANKS.reduce((acc, r) => {
+        // Handle resplit aces if allowed
+        const isAceSplit = rank === "A";
+        if (isAceSplit && r === "A" && rules.resplitAces && nextSplitHandsUsed < opts.maxSplitHands) {
+          const resplit = bestAction(["A", "A"], {
+            canDouble: false,
+            canSplit: true,
+            splitHandsUsed: nextSplitHandsUsed,
+            maxSplitHands: opts.maxSplitHands,
+            isSplitAces: true,
+          });
+          return acc + PROB * resplit.ev;
+        }
+
+        const hand = [rank, r];
+        const child = bestAction(hand, {
+          canDouble: canDouble(hand, rules, isAceSplit) && (!isAceSplit || rules.hitSplitAces),
+          canSplit: !isAceSplit && opts.splitHandsUsed + 1 < opts.maxSplitHands, // allow further splits for non-aces if capacity remains
+          splitHandsUsed: nextSplitHandsUsed,
+          maxSplitHands: opts.maxSplitHands,
+          isSplitAces: isAceSplit,
+        });
+        return acc + PROB * child.ev;
+      }, 0);
+
+      const splitVal = splitHandEV; // per-hand EV; overall EV is the same per unit stake
+      if (splitVal > best.ev) {
+        best = { ev: splitVal, action: "SPLIT", reasoning: "Splitting yields higher EV across hands." };
+      }
+    }
+
+    memo.set(key, best);
+    return best;
   }
 
-  if (isPair) {
-    const rec = pairStrategy(playerCards[0], dealer, ruleset);
-    return {
-      recommendation: rec,
-      reasoning: rec === "SPLIT" ? "Pair play favors splitting in this spot." : "Pair play favors keeping the hand.",
-    };
-  }
-
-  if (isSoft) {
-    const rec = softStrategy(total, dealer, playerCards, ruleset);
-    return {
-      recommendation: rec,
-      reasoning: "Soft total guidance based on dealer upcard.",
-    };
-  }
-
-  const rec = hardStrategy(total, dealer, playerCards.length === 2, ruleset);
   return {
-    recommendation: rec,
-    reasoning: "Hard total guidance based on dealer upcard.",
+    recommendation: result.action,
+    reasoning: result.reasoning,
   };
 }

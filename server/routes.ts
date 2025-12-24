@@ -109,6 +109,9 @@ export async function registerRoutes(
       try {
         const input = api.strategy.calculate.input.parse(req.body);
         const ruleset = await storage.getRuleset(input.rulesetId);
+        if (!ruleset) {
+          return res.status(404).json({ message: "Ruleset not found" });
+        }
         
         res.json({
             ...calculateStrategy(input.dealerUpCard, input.playerCards, ruleset)
