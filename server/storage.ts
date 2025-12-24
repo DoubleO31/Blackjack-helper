@@ -1,38 +1,87 @@
-import { type User, type InsertUser } from "@shared/schema";
-import { randomUUID } from "crypto";
-
-// modify the interface with any CRUD methods
-// you might need
+import { db } from "./db";
+import {
+  rulesets, sessions, hands,
+  type InsertRuleset, type InsertSession, type InsertHand,
+  type Ruleset, type Session, type Hand
+} from "@shared/schema";
+import { eq, desc } from "drizzle-orm";
 
 export interface IStorage {
-  getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
+  // Rulesets
+  getRulesets(): Promise<Ruleset[]>;
+  getRuleset(id: number): Promise<Ruleset | undefined>;
+  createRuleset(ruleset: InsertRuleset): Promise<Ruleset>;
+
+  // Sessions
+  getSessions(): Promise<Session[]>;
+  getSession(id: number): Promise<Session | undefined>;
+  createSession(session: InsertSession): Promise<Session>;
+  updateSession(id: number, updates: Partial<Session>): Promise<Session>;
+
+  // Hands
+  getHands(sessionId: number): Promise<Hand[]>;
+  createHand(hand: InsertHand): Promise<Hand>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<string, User>;
-
-  constructor() {
-    this.users = new Map();
+export class DatabaseStorage implements IStorage {
+  // Rulesets
+  async getRulesets(): Promise<Ruleset[]> {
+    return await db.select().from(rulesets);
   }
 
-  async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+  async getRuleset(id: number): Promise<Ruleset | undefined> {
+    const [ruleset] = await db.select().from(rulesets).where(eq(rulesets.id, id));
+    return ruleset;
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+  async createRuleset(ruleset: InsertRuleset): Promise<Ruleset> {
+    const [newRuleset] = await db.insert(rulesets).values(ruleset).returning();
+    return newRuleset;
   }
 
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
-    return user;
+  // Sessions
+  async getSessions(): Promise<Session[]> {
+    return await db.select().from(sessions).orderBy(desc(sessions.startTime));
+  }
+
+  async getSession(id: number): Promise<Session | undefined> {
+    const [session] = await db.select().from(sessions).where(eq(sessions.id, id));
+    return session;
+  }
+
+  async createSession(session: InsertSession): Promise<Session> {
+    const [newSession] = await db.insert(sessions).values({
+        ...session,
+        currentBankroll: session.initialBankroll
+    }).returning();
+    return newSession;
+  }
+  
+  async updateSession(id: number, updates: Partial<Session>): Promise<Session> {
+    const [updated] = await db.update(sessions).set(updates).where(eq(sessions.id, id)).returning();
+    return updated;
+  }
+
+  // Hands
+  async getHands(sessionId: number): Promise<Hand[]> {
+    return await db.select().from(hands).where(eq(hands.sessionId, sessionId)).orderBy(desc(hands.handNumber));
+  }
+
+  async createHand(hand: InsertHand): Promise<Hand> {
+    const [newHand] = await db.insert(hands).values(hand).returning();
+    
+    // Update session bankroll based on result
+    // This is a simplified update, ideally we'd handle this transactionally or calculate on fly
+    // But for this MVP, we update the session record
+    const session = await this.getSession(hand.sessionId);
+    if (session) {
+        await this.updateSession(hand.sessionId, {
+            currentBankroll: session.currentBankroll + hand.payout
+        });
+    }
+
+    return newHand;
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
