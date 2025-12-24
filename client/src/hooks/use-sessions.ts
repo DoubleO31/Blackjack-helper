@@ -64,3 +64,22 @@ export function useUpdateSession() {
     },
   });
 }
+
+export function useDeleteSession() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number) => {
+      const url = buildUrl(api.sessions.delete.path, { id });
+      const res = await fetch(url, {
+        method: api.sessions.delete.method,
+      });
+      if (res.status === 404) throw new Error("Session not found");
+      if (!res.ok) throw new Error("Failed to delete session");
+      return true;
+    },
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: [api.sessions.list.path] });
+      queryClient.invalidateQueries({ queryKey: [api.sessions.get.path, id] });
+    },
+  });
+}

@@ -17,6 +17,7 @@ export interface IStorage {
   getSession(id: number): Promise<Session | undefined>;
   createSession(session: InsertSession): Promise<Session>;
   updateSession(id: number, updates: Partial<Session>): Promise<Session>;
+  deleteSession(id: number): Promise<boolean>;
 
   // Hands
   getHands(sessionId: number): Promise<Hand[]>;
@@ -60,6 +61,12 @@ export class DatabaseStorage implements IStorage {
   async updateSession(id: number, updates: Partial<Session>): Promise<Session> {
     const [updated] = await db.update(sessions).set(updates).where(eq(sessions.id, id)).returning();
     return updated;
+  }
+
+  async deleteSession(id: number): Promise<boolean> {
+    await db.delete(hands).where(eq(hands.sessionId, id));
+    const deleted = await db.delete(sessions).where(eq(sessions.id, id)).returning({ id: sessions.id });
+    return deleted.length > 0;
   }
 
   // Hands

@@ -1,28 +1,29 @@
 import { useEffect, useMemo, useState } from "react";
-import { useRoute } from "wouter";
-import { useSession } from "@/hooks/use-sessions";
+import { useRoute, useLocation } from "wouter";
+import { useSession, useDeleteSession } from "@/hooks/use-sessions";
 import { useCreateHand, useHands } from "@/hooks/use-hands";
 import { useStrategy } from "@/hooks/use-strategy";
 import { CardInput } from "@/components/CardInput";
 import { PlayingCard, EmptyCardSlot } from "@/components/PlayingCard";
 import { StrategyCard } from "@/components/StrategyCard";
-import { ArrowLeft, RefreshCcw, DollarSign, Wallet, Check, X, CircleOff, ChevronUp, ChevronDown } from "lucide-react";
+import { ArrowLeft, RefreshCcw, DollarSign, Wallet, Check, X, CircleOff, ChevronUp, ChevronDown, Trash2 } from "lucide-react";
 import { Link } from "wouter";
 import { computeNextBet } from "@/lib/betting";
 
 export default function Session() {
   const [, params] = useRoute("/session/:id");
   const sessionId = params ? parseInt(params.id) : 0;
+  const [, setLocation] = useLocation();
 
   const { data: session, isLoading: isLoadingSession } = useSession(sessionId);
   const { data: hands } = useHands(sessionId);
   const { mutate: createHand, isPending: isRecording } = useCreateHand();
   const { mutate: calculateStrategy, data: strategy, isPending: isCalculating } = useStrategy();
+  const { mutate: deleteSession, isPending: isDeleting } = useDeleteSession();
 
   // Game State
   const [dealerCard, setDealerCard] = useState<string | null>(null);
   const [playerCards, setPlayerCards] = useState<string[]>([]);
-  const [activeInput, setActiveInput] = useState<"dealer" | "player">("dealer");
   const [isPanelOpen, setIsPanelOpen] = useState(false);
 
   const orderedHands = useMemo(
@@ -72,13 +73,12 @@ export default function Session() {
 
   // Handlers
   const handleCardSelect = (value: string) => {
-    if (activeInput === "dealer") {
+    if (!dealerCard) {
       setDealerCard(value);
-      // keep activeInput as dealer unless user switches tabs; no auto-switch to avoid mismatch
-    } else {
-      if (playerCards.length < 5) {
-        setPlayerCards([...playerCards, value]);
-      }
+      return;
+    }
+    if (playerCards.length < 5) {
+      setPlayerCards([...playerCards, value]);
     }
   };
 
@@ -106,17 +106,28 @@ export default function Session() {
       result,
     }, {
       onSuccess: () => {
-        resetHand();
-        setIsPanelOpen(false);
+        resetHand(false);
       }
     });
   };
 
-  const resetHand = () => {
+  const handleDelete = () => {
+    if (!session) return;
+    const confirmed = window.confirm("Delete this session and all recorded hands?");
+    if (!confirmed) return;
+    deleteSession(sessionId, {
+      onSuccess: () => {
+        setLocation("/");
+      },
+    });
+  };
+
+  const resetHand = (closePanel = true) => {
     setDealerCard(null);
     setPlayerCards([]);
-    setActiveInput("dealer");
-    setIsPanelOpen(false);
+    if (closePanel) {
+      setIsPanelOpen(false);
+    }
   };
 
   if (isLoadingSession) return <div className="min-h-screen flex items-center justify-center text-white">Loading...</div>;
@@ -138,13 +149,23 @@ export default function Session() {
             Next bet: ${currentBet.toLocaleString()} ({strategyLabel})
           </div>
         </div>
-        <button 
-           onClick={resetHand} 
-           className="text-muted-foreground hover:text-white p-2 -mr-2"
-           title="Reset Hand"
-        >
-          <RefreshCcw className="w-5 h-5" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button 
+             onClick={handleDelete} 
+             disabled={isDeleting}
+             className="text-muted-foreground hover:text-white p-2"
+             title="Delete Session"
+          >
+            <Trash2 className="w-5 h-5" />
+          </button>
+          <button 
+             onClick={resetHand} 
+             className="text-muted-foreground hover:text-white p-2 -mr-2"
+             title="Reset Hand"
+          >
+            <RefreshCcw className="w-5 h-5" />
+          </button>
+        </div>
       </header>
 
       {/* Main Game Area */}
@@ -154,13 +175,13 @@ export default function Session() {
           {/* Dealer Area */}
           <section className="flex flex-col items-center justify-center space-y-2 min-h-[140px] max-w-[160px] min-w-0">
             <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Dealer</span>
-            <div onClick={() => setActiveInput("dealer")}>
+            <div onClick={() => setIsPanelOpen(true)}>
               {dealerCard ? (
                 <PlayingCard value={dealerCard} isDealer />
               ) : (
                 <EmptyCardSlot 
                   label="Select" 
-                  onClick={() => setActiveInput("dealer")} 
+                  onClick={() => setIsPanelOpen(true)} 
                 />
               )}
             </div>
@@ -168,7 +189,7 @@ export default function Session() {
 
           {/* Strategy Display - Center */}
           <section className="flex items-center justify-center min-w-0">
-            <div className="w-24 sm:w-28 md:w-32">
+            <div className="w-28 sm:w-32 md:w-36">
               {dealerCard && playerCards.length >= 2 ? (
                 <StrategyCard 
                   recommendation={strategy?.recommendation || null} 
@@ -194,7 +215,7 @@ export default function Session() {
               {playerCards.length < 5 && (
                 <EmptyCardSlot 
                   label="Add" 
-                  onClick={() => setActiveInput("player")} 
+                  onClick={() => setIsPanelOpen(true)} 
                 />
               )}
             </div>
@@ -212,7 +233,7 @@ export default function Session() {
             aria-controls="card-entry-panel"
           >
             <span className="flex items-center gap-2">
-              {activeInput === "dealer" ? "Dealer upcard" : "Player hand"}
+              {dealerCard ? "Player hand" : "Dealer upcard"}
               <span className="text-[11px] text-white/70">Hand #{hands ? hands.length + 1 : 1}</span>
             </span>
             <span className="flex items-center gap-3">
@@ -223,24 +244,6 @@ export default function Session() {
 
           {isPanelOpen && (
             <div id="card-entry-panel" className="mt-3 space-y-3 max-h-[60vh] sm:max-h-[70vh] overflow-y-auto pb-2">
-              {/* Tabbed selector for Dealer/Player */}
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <button
-                  onClick={() => setActiveInput("dealer")}
-                  aria-pressed={activeInput === "dealer"}
-                  className={`rounded-lg px-3 py-2 border ${activeInput === "dealer" ? "bg-primary/20 border-primary text-white" : "bg-white/5 border-white/10 text-muted-foreground"}`}
-                >
-                  Dealer
-                </button>
-                <button
-                  onClick={() => setActiveInput("player")}
-                  aria-pressed={activeInput === "player"}
-                  className={`rounded-lg px-3 py-2 border ${activeInput === "player" ? "bg-primary/20 border-primary text-white" : "bg-white/5 border-white/10 text-muted-foreground"}`}
-                >
-                  Player
-                </button>
-              </div>
-
               <CardInput onSelect={handleCardSelect} disabled={false} compact />
 
               {/* Result Buttons - Show when strategy available */}

@@ -74,7 +74,15 @@ export const api = {
             200: z.custom<typeof sessions.$inferSelect>(),
             404: errorSchemas.notFound,
         }
-    }
+    },
+    delete: {
+      method: 'DELETE' as const,
+      path: '/api/sessions/:id',
+      responses: {
+        204: z.undefined(),
+        404: errorSchemas.notFound,
+      },
+    },
   },
   hands: {
     list: {

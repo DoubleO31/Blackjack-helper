@@ -23,7 +23,7 @@ export function StrategyCard({ recommendation, reasoning, isLoading, compact }: 
   const containerSize = compact
     ? "rounded-xl p-3 border-2 shadow-lg"
     : "rounded-2xl p-8 border-4 shadow-2xl";
-  const titleSize = compact ? "text-2xl" : "text-5xl";
+  const titleSize = compact ? "text-lg tracking-normal leading-tight" : "text-5xl tracking-wider";
   const bodySize = compact ? "text-xs" : "text-lg";
   const minHeight = compact ? "min-h-[80px]" : "min-h-[140px]";
 
@@ -48,7 +48,7 @@ export function StrategyCard({ recommendation, reasoning, isLoading, compact }: 
             <motion.h2 
               initial={{ y: 20, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
-              className={cn("font-black tracking-wider font-display uppercase drop-shadow-md", titleSize)}
+              className={cn("font-black font-display uppercase drop-shadow-md break-words", titleSize)}
             >
               {recommendation}
             </motion.h2>

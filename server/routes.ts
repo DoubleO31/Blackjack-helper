@@ -82,6 +82,13 @@ export async function registerRoutes(
       }
   });
 
+  app.delete(api.sessions.delete.path, async (req, res) => {
+    const id = Number(req.params.id);
+    const deleted = await storage.deleteSession(id);
+    if (!deleted) return res.status(404).json({ message: "Not found" });
+    res.status(204).end();
+  });
+
   // Hands
   app.get(api.hands.list.path, async (req, res) => {
     const items = await storage.getHands(Number(req.params.sessionId));
