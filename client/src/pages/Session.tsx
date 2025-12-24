@@ -25,10 +25,17 @@ export default function Session() {
   const [dealerCard, setDealerCard] = useState<string | null>(null);
   const [playerCards, setPlayerCards] = useState<string[]>([]);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
+  const [splitCard, setSplitCard] = useState<string | null>(null);
+  const [splitHandIndex, setSplitHandIndex] = useState(0);
+  const [handCounter, setHandCounter] = useState<number | null>(null);
 
   const orderedHands = useMemo(
     () => (hands ? [...hands].sort((a, b) => a.handNumber - b.handNumber) : []),
     [hands],
+  );
+  const nextHandNumber = useMemo(
+    () => handCounter ?? ((hands?.length || 0) + 1),
+    [handCounter, hands?.length],
   );
 
   const betInfo = useMemo(
@@ -59,6 +66,18 @@ export default function Session() {
         return betInfo.strategyUsed || session?.bettingStrategy || "Flat";
     }
   }, [betInfo.strategyUsed, session?.bettingStrategy]);
+  const isSplitMode = splitCard !== null;
+  const canSplitHand =
+    !isSplitMode &&
+    dealerCard &&
+    playerCards.length === 2 &&
+    playerCards[0] === playerCards[1];
+
+  useEffect(() => {
+    if (!hands) return;
+    const base = hands.length + 1;
+    setHandCounter((prev) => (prev && prev > base ? prev : base));
+  }, [hands]);
 
   // Strategy Calculation Effect
   useEffect(() => {
@@ -82,6 +101,14 @@ export default function Session() {
     }
   };
 
+  const handleSplitStart = () => {
+    if (!canSplitHand) return;
+    setSplitCard(playerCards[0]);
+    setSplitHandIndex(0);
+    setPlayerCards([playerCards[0]]);
+    setIsPanelOpen(true);
+  };
+
   const handleResult = (result: "WIN" | "LOSS" | "PUSH" | "BLACKJACK" | "SURRENDER") => {
     if (!session || !dealerCard || !strategy) return;
 
@@ -95,9 +122,10 @@ export default function Session() {
     else if (result === "SURRENDER") payout = -Math.floor(bet * 0.5);
     // PUSH is 0
 
+    const handNumber = nextHandNumber;
     createHand({
       sessionId,
-      handNumber: (hands?.length || 0) + 1,
+      handNumber,
       dealerUpCard: dealerCard,
       playerCards: playerCards,
       recommendedAction: strategy.recommendation,
@@ -106,6 +134,17 @@ export default function Session() {
       result,
     }, {
       onSuccess: () => {
+        setHandCounter(handNumber + 1);
+        if (splitCard) {
+          if (splitHandIndex === 0) {
+            setSplitHandIndex(1);
+            setPlayerCards([splitCard]);
+            setIsPanelOpen(true);
+            return;
+          }
+          setSplitCard(null);
+          setSplitHandIndex(0);
+        }
         resetHand(false);
       }
     });
@@ -125,6 +164,8 @@ export default function Session() {
   const resetHand = (closePanel = true) => {
     setDealerCard(null);
     setPlayerCards([]);
+    setSplitCard(null);
+    setSplitHandIndex(0);
     if (closePanel) {
       setIsPanelOpen(false);
     }
@@ -234,7 +275,9 @@ export default function Session() {
           >
             <span className="flex items-center gap-2">
               {dealerCard ? "Player hand" : "Dealer upcard"}
-              <span className="text-[11px] text-white/70">Hand #{hands ? hands.length + 1 : 1}</span>
+              <span className="text-[11px] text-white/70">
+                {isSplitMode ? `Split ${splitHandIndex + 1}/2` : `Hand #${nextHandNumber}`}
+              </span>
             </span>
             <span className="flex items-center gap-3">
               <span className="text-[11px] text-white/70">Next bet ${currentBet}</span>
@@ -246,8 +289,17 @@ export default function Session() {
             <div id="card-entry-panel" className="mt-3 space-y-3 max-h-[60vh] sm:max-h-[70vh] overflow-y-auto pb-2">
               <CardInput onSelect={handleCardSelect} disabled={false} compact />
 
+              {canSplitHand && (
+                <button
+                  onClick={handleSplitStart}
+                  className="w-full rounded-lg border border-primary/40 bg-primary/15 text-primary-foreground text-sm font-semibold py-2 hover:bg-primary/25 transition"
+                >
+                  Split hand
+                </button>
+              )}
+
               {/* Result Buttons - Show when strategy available */}
-              {strategy?.recommendation && (
+              {strategy?.recommendation && playerCards.length >= 2 && (
                 <div className="grid grid-cols-5 gap-2">
                   <button
                     onClick={() => handleResult("WIN")}

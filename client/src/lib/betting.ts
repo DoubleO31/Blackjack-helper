@@ -56,8 +56,7 @@ function clampUnits(units: number, cap: number): number {
 }
 
 function unitsDeltaFromHand(hand: Hand, unitSize: number): number {
-  const base = hand.betAmount && hand.betAmount > 0 ? hand.betAmount : unitSize;
-  if (!base) return 0;
+  const base = unitSize > 0 ? unitSize : 1;
   return hand.payout / base;
 }
 
@@ -161,20 +160,19 @@ function runMartingaleLite(unitSize: number, hands: Hand[], cap: number): BetInf
 }
 
 function runFibonacciLite(unitSize: number, hands: Hand[], cap: number): BetInfo {
-  const seq = FIB_LITE_SEQ.filter((v) => v <= cap);
-  const effectiveSeq = seq.length ? seq : [cap];
+  const seq = FIB_LITE_SEQ.length ? FIB_LITE_SEQ : [1];
   let index = 0;
 
   for (const hand of hands) {
     const delta = unitsDeltaFromHand(hand, unitSize);
     if (delta < 0) {
-      index = Math.min(index + 1, effectiveSeq.length - 1);
+      index = Math.min(index + 1, seq.length - 1);
     } else if (delta > 0) {
       index = Math.max(index - 2, 0);
     }
   }
 
-  const nextUnits = clampUnits(effectiveSeq[index], cap);
+  const nextUnits = clampUnits(seq[index], cap);
   return { nextUnits, nextAmount: nextUnits * unitSize, strategyUsed: "fibonacci_lite" };
 }
 
