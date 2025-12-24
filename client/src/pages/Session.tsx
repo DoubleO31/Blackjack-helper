@@ -148,22 +148,40 @@ export default function Session() {
       </header>
 
       {/* Main Game Area */}
-      <main className="flex-1 p-4 space-y-8">
-        
-        {/* Dealer Area */}
-        <section className="flex flex-col items-center justify-center space-y-2 min-h-[140px]">
-          <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Dealer Upcard</span>
-          <div onClick={() => setActiveInput("dealer")}>
-            {dealerCard ? (
-              <PlayingCard value={dealerCard} isDealer />
-            ) : (
-              <EmptyCardSlot 
-                label="Select" 
-                onClick={() => setActiveInput("dealer")} 
-              />
-            )}
-          </div>
-        </section>
+      <main className="flex-1 p-4 space-y-6">
+        {/* Hands Row */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+          {/* Dealer Area */}
+          <section className="flex flex-col items-center justify-center space-y-2 min-h-[140px]">
+            <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Dealer</span>
+            <div onClick={() => setActiveInput("dealer")}>
+              {dealerCard ? (
+                <PlayingCard value={dealerCard} isDealer />
+              ) : (
+                <EmptyCardSlot 
+                  label="Select" 
+                  onClick={() => setActiveInput("dealer")} 
+                />
+              )}
+            </div>
+          </section>
+
+          {/* Player Area */}
+          <section className="flex flex-col items-center space-y-2">
+            <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Player</span>
+            <div className="flex flex-wrap justify-center gap-2 sm:gap-3 min-h-[120px]">
+              {playerCards.map((card, i) => (
+                 <PlayingCard key={i} value={card} />
+              ))}
+              {playerCards.length < 5 && (
+                <EmptyCardSlot 
+                  label="Add" 
+                  onClick={() => setActiveInput("player")} 
+                />
+              )}
+            </div>
+          </section>
+        </div>
 
         {/* Strategy Display - Central Focus */}
         <section className="w-full max-w-sm mx-auto">
@@ -174,26 +192,10 @@ export default function Session() {
               isLoading={isCalculating}
             />
           ) : (
-            <div className="h-40 rounded-2xl bg-white/5 border border-dashed border-white/10 flex items-center justify-center text-muted-foreground text-sm uppercase tracking-widest">
-              Deal Cards for Advice
+            <div className="h-28 rounded-2xl bg-white/5 border border-dashed border-white/10 flex items-center justify-center text-muted-foreground text-xs uppercase tracking-widest px-4 text-center">
+              Deal cards for advice
             </div>
           )}
-        </section>
-
-        {/* Player Area */}
-        <section className="flex flex-col items-center space-y-2">
-          <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Player Hand</span>
-          <div className="flex flex-wrap justify-center gap-2 sm:gap-4 min-h-[120px]">
-            {playerCards.map((card, i) => (
-               <PlayingCard key={i} value={card} />
-            ))}
-            {playerCards.length < 5 && (
-              <EmptyCardSlot 
-                label="Add" 
-                onClick={() => setActiveInput("player")} 
-              />
-            )}
-          </div>
         </section>
       </main>
 

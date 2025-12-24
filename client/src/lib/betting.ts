@@ -62,18 +62,26 @@ function unitsDeltaFromHand(hand: Hand, unitSize: number): number {
 }
 
 function runMiniParoli(unitSize: number, hands: Hand[], cap: number): BetInfo {
-  let stepIndex = 0;
+  let stepIndex = 0; // which rung was just used
   const maxIndex = MINI_PAROLI_LADDER.length - 1;
 
   for (const hand of hands) {
+    const currentUnits = clampUnits(MINI_PAROLI_LADDER[stepIndex], cap);
     const delta = unitsDeltaFromHand(hand, unitSize);
+
     if (delta > 0) {
-      stepIndex = Math.min(stepIndex + 1, maxIndex);
+      // advance on win; if we just won at the top rung, reset
       if (stepIndex === maxIndex) {
-        stepIndex = 0; // completed ladder on a win
+        stepIndex = 0;
+      } else {
+        stepIndex = Math.min(stepIndex + 1, maxIndex);
       }
     } else if (delta < 0) {
+      // any loss resets
       stepIndex = 0;
+    } else {
+      // push: keep same step
+      stepIndex = stepIndex;
     }
   }
 
