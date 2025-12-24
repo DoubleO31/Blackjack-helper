@@ -170,8 +170,17 @@ export default function Session() {
       <div className="fixed bottom-0 inset-x-0 bg-background/95 backdrop-blur-xl border-t border-white/10 p-4 pb-8 z-40">
         <div className="max-w-lg mx-auto space-y-4">
           
-          {/* Action Prompt or Result Buttons */}
-          {strategy?.recommendation ? (
+          {/* Card Input - Always Available */}
+          <CardInput onSelect={handleCardSelect} disabled={false} />
+
+          {/* Context indicator */}
+          <div className="flex justify-between items-center text-xs text-muted-foreground px-2">
+             <span>{activeInput === 'dealer' ? 'Select Dealer Card' : 'Select Player Cards'}</span>
+             <span>Hand #{hands ? hands.length + 1 : 1}</span>
+          </div>
+
+          {/* Result Buttons - Show when strategy available */}
+          {strategy?.recommendation && (
             <div className="grid grid-cols-4 gap-2">
                <button 
                   onClick={() => handleResult("WIN")} 
@@ -206,15 +215,7 @@ export default function Session() {
                  <span className="text-xs font-bold">BJ</span>
                </button>
             </div>
-          ) : (
-            <CardInput onSelect={handleCardSelect} disabled={false} />
           )}
-
-          {/* Context indicator */}
-          <div className="flex justify-between items-center text-xs text-muted-foreground px-2">
-             <span>{activeInput === 'dealer' ? 'Select Dealer Card' : 'Select Player Cards'}</span>
-             <span>Hand #{hands ? hands.length + 1 : 1}</span>
-          </div>
         </div>
       </div>
     </div>
