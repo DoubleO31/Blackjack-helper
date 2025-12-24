@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { useCreateSession } from "@/hooks/use-sessions";
 import { useRulesets } from "@/hooks/use-rulesets";
 import { ArrowLeft, Loader2 } from "lucide-react";
-import { Link } from "wouter";
 import { cn } from "@/lib/utils";
+import { type BettingStrategyId } from "@/lib/betting";
 
 export default function NewSession() {
   const [, setLocation] = useLocation();
@@ -16,21 +16,24 @@ export default function NewSession() {
     rulesetId: 0,
     initialBankroll: 1000,
     unitSize: 25,
-    bettingStrategy: "flat" as "flat" | "martingale" | "positive_progression",
+    bettingStrategy: "flat" as BettingStrategyId,
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.rulesetId) return;
 
-    createSession({
-      ...formData,
-      currentBankroll: formData.initialBankroll,
-    }, {
-      onSuccess: (session) => {
-        setLocation(`/session/${session.id}`);
-      }
-    });
+    createSession(
+      {
+        ...formData,
+        currentBankroll: formData.initialBankroll,
+      },
+      {
+        onSuccess: (session) => {
+          setLocation(`/session/${session.id}`);
+        },
+      },
+    );
   };
 
   return (
@@ -60,16 +63,19 @@ export default function NewSession() {
                     "p-4 rounded-xl border text-left transition-all",
                     formData.rulesetId === ruleset.id
                       ? "bg-primary/20 border-primary text-white ring-2 ring-primary/20"
-                      : "bg-card border-white/10 text-muted-foreground hover:bg-white/5 hover:border-white/20"
+                      : "bg-card border-white/10 text-muted-foreground hover:bg-white/5 hover:border-white/20",
                   )}
                 >
                   <div className="font-bold">{ruleset.name}</div>
                   <div className="text-xs opacity-70 mt-1">
-                    {ruleset.decks} Decks • {ruleset.blackjackPayout} • {ruleset.isH17 ? 'H17' : 'S17'}
+                    {ruleset.decks} decks • {ruleset.blackjackPayout} • {ruleset.isH17 ? "H17" : "S17"} • Double {ruleset.doubleRule.replace(/_/g, " ")}
                   </div>
                 </button>
               ))}
-              <Link href="/rulesets" className="flex items-center justify-center p-4 rounded-xl border border-dashed border-white/10 text-muted-foreground hover:bg-white/5 hover:text-white transition-colors">
+              <Link
+                href="/rulesets"
+                className="flex items-center justify-center p-4 rounded-xl border border-dashed border-white/10 text-muted-foreground hover:bg-white/5 hover:text-white transition-colors"
+              >
                 <span className="text-sm">+ Create New Ruleset</span>
               </Link>
             </div>
@@ -110,6 +116,19 @@ export default function NewSession() {
                 onChange={(e) => setFormData({ ...formData, unitSize: parseInt(e.target.value) || 0 })}
               />
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-white uppercase tracking-wider">Betting Strategy</label>
+            <select
+              className="w-full bg-card border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+              value={formData.bettingStrategy}
+              onChange={(e) => setFormData({ ...formData, bettingStrategy: e.target.value as BettingStrategyId })}
+            >
+              <option value="flat">Flat (1u)</option>
+              <option value="mini_paroli">Mini-Paroli 1-2-4</option>
+              <option value="dalembert">d'Alembert</option>
+            </select>
           </div>
         </section>
 

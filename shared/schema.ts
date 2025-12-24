@@ -9,8 +9,12 @@ export const rulesets = pgTable("rulesets", {
   name: text("name").notNull(), // e.g., "Vegas Strip Single Deck"
   decks: integer("decks").notNull().default(6),
   isH17: boolean("is_h17").notNull().default(true), // Hit on Soft 17
+  doubleRule: text("double_rule").notNull().default("any_two"), // any_two, nine_to_eleven, ten_to_eleven, none
   canDoubleAfterSplit: boolean("can_double_after_split").notNull().default(true),
-  canSurrender: boolean("can_surrender").notNull().default(false),
+  maxSplitHands: integer("max_split_hands").notNull().default(4),
+  resplitAces: boolean("resplit_aces").notNull().default(false),
+  hitSplitAces: boolean("hit_split_aces").notNull().default(false),
+  surrender: text("surrender").notNull().default("none"), // none, late
   blackjackPayout: text("blackjack_payout").notNull().default("3:2"), // "3:2", "6:5", "1:1"
 });
 

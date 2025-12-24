@@ -20,8 +20,12 @@ export default function Rulesets() {
     name: "",
     decks: 6,
     isH17: true,
+    doubleRule: "any_two" as "any_two" | "nine_to_eleven" | "ten_to_eleven" | "none",
     canDoubleAfterSplit: true,
-    canSurrender: false,
+    maxSplitHands: 4,
+    resplitAces: false,
+    hitSplitAces: false,
+    surrender: "late" as "none" | "late",
     blackjackPayout: "3:2",
   });
 
@@ -34,8 +38,12 @@ export default function Rulesets() {
           name: "",
           decks: 6,
           isH17: true,
+          doubleRule: "any_two",
           canDoubleAfterSplit: true,
-          canSurrender: false,
+          maxSplitHands: 4,
+          resplitAces: false,
+          hitSplitAces: false,
+          surrender: "late",
           blackjackPayout: "3:2",
         });
       },
@@ -99,6 +107,57 @@ export default function Rulesets() {
                 </div>
               </div>
 
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Double Rules</label>
+                  <select
+                    className="w-full bg-background border border-white/10 rounded-lg p-3 focus:outline-none focus:border-primary"
+                    value={newRuleset.doubleRule}
+                    onChange={e => setNewRuleset({ ...newRuleset, doubleRule: e.target.value as any })}
+                  >
+                    <option value="any_two">Any two cards</option>
+                    <option value="nine_to_eleven">9–11 only</option>
+                    <option value="ten_to_eleven">10–11 only</option>
+                    <option value="none">No doubles</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Surrender</label>
+                  <select
+                    className="w-full bg-background border border-white/10 rounded-lg p-3 focus:outline-none focus:border-primary"
+                    value={newRuleset.surrender}
+                    onChange={e => setNewRuleset({ ...newRuleset, surrender: e.target.value as any })}
+                  >
+                    <option value="late">Late surrender</option>
+                    <option value="none">Not allowed</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Max Split Hands</label>
+                  <select
+                    className="w-full bg-background border border-white/10 rounded-lg p-3 focus:outline-none focus:border-primary"
+                    value={newRuleset.maxSplitHands}
+                    onChange={e => setNewRuleset({ ...newRuleset, maxSplitHands: parseInt(e.target.value) })}
+                  >
+                    {[2,3,4].map(n => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Hit Split Aces</label>
+                  <select
+                    className="w-full bg-background border border-white/10 rounded-lg p-3 focus:outline-none focus:border-primary"
+                    value={newRuleset.hitSplitAces ? "yes" : "no"}
+                    onChange={e => setNewRuleset({ ...newRuleset, hitSplitAces: e.target.value === "yes" })}
+                  >
+                    <option value="no">No</option>
+                    <option value="yes">Yes</option>
+                  </select>
+                </div>
+              </div>
+
               <div className="space-y-4 pt-2">
                 <label className="flex items-center gap-3 p-3 rounded-lg border border-white/5 bg-white/5 cursor-pointer hover:bg-white/10 transition-colors">
                   <input 
@@ -124,10 +183,10 @@ export default function Rulesets() {
                   <input 
                     type="checkbox"
                     className="w-5 h-5 rounded border-gray-500 text-primary focus:ring-primary"
-                    checked={newRuleset.canSurrender}
-                    onChange={e => setNewRuleset({...newRuleset, canSurrender: e.target.checked})}
+                    checked={newRuleset.resplitAces}
+                    onChange={e => setNewRuleset({...newRuleset, resplitAces: e.target.checked})}
                   />
-                  <span className="font-medium">Surrender Allowed</span>
+                  <span className="font-medium">Resplit Aces</span>
                 </label>
               </div>
 
@@ -154,7 +213,10 @@ export default function Rulesets() {
               <div>BJ Payout: <span className="text-white">{ruleset.blackjackPayout}</span></div>
               <div>Soft 17: <span className={cn(ruleset.isH17 ? "text-red-400" : "text-green-400")}>{ruleset.isH17 ? "Hit" : "Stand"}</span></div>
               <div>DAS: <span className="text-white">{ruleset.canDoubleAfterSplit ? "Yes" : "No"}</span></div>
-              <div>Surrender: <span className="text-white">{ruleset.canSurrender ? "Yes" : "No"}</span></div>
+              <div>Double: <span className="text-white">{ruleset.doubleRule}</span></div>
+              <div>Surrender: <span className="text-white">{ruleset.surrender === "late" ? "Late" : "No"}</span></div>
+              <div>Splits: <span className="text-white">Up to {ruleset.maxSplitHands} hands</span></div>
+              <div>Aces: <span className="text-white">{ruleset.resplitAces ? "Resplit" : "No resplit"} / {ruleset.hitSplitAces ? "Hit" : "Stand"}</span></div>
             </div>
           </div>
         ))}

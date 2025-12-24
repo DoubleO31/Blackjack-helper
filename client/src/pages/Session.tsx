@@ -1,32 +1,54 @@
-import { useEffect, useState } from "react";
-import { useRoute, useLocation } from "wouter";
-import { useSession, useUpdateSession } from "@/hooks/use-sessions";
+import { useEffect, useMemo, useState } from "react";
+import { useRoute } from "wouter";
+import { useSession } from "@/hooks/use-sessions";
 import { useCreateHand, useHands } from "@/hooks/use-hands";
 import { useStrategy } from "@/hooks/use-strategy";
 import { CardInput } from "@/components/CardInput";
 import { PlayingCard, EmptyCardSlot } from "@/components/PlayingCard";
 import { StrategyCard } from "@/components/StrategyCard";
-import { ArrowLeft, RefreshCcw, DollarSign, Wallet, Check, X, Ban, Split, Layers, CircleOff } from "lucide-react";
+import { ArrowLeft, RefreshCcw, DollarSign, Wallet, Check, X, CircleOff } from "lucide-react";
 import { Link } from "wouter";
-import { cn } from "@/lib/utils";
-import { motion, AnimatePresence } from "framer-motion";
+import { computeNextBet } from "@/lib/betting";
 
 export default function Session() {
   const [, params] = useRoute("/session/:id");
   const sessionId = params ? parseInt(params.id) : 0;
-  const [, setLocation] = useLocation();
 
   const { data: session, isLoading: isLoadingSession } = useSession(sessionId);
   const { data: hands } = useHands(sessionId);
   const { mutate: createHand, isPending: isRecording } = useCreateHand();
   const { mutate: calculateStrategy, data: strategy, isPending: isCalculating } = useStrategy();
-  const { mutate: updateSession } = useUpdateSession();
 
   // Game State
   const [dealerCard, setDealerCard] = useState<string | null>(null);
   const [playerCards, setPlayerCards] = useState<string[]>([]);
   const [activeInput, setActiveInput] = useState<"dealer" | "player">("dealer");
-  const [showResultInput, setShowResultInput] = useState(false);
+
+  const orderedHands = useMemo(
+    () => (hands ? [...hands].sort((a, b) => a.handNumber - b.handNumber) : []),
+    [hands],
+  );
+
+  const betInfo = useMemo(
+    () =>
+      session
+        ? computeNextBet(session.bettingStrategy, session.unitSize, orderedHands)
+        : { nextAmount: session?.unitSize ?? 0, nextUnits: 1, strategyUsed: "flat" },
+    [session, orderedHands],
+  );
+  const currentBet = betInfo.nextAmount || session?.unitSize || 0;
+  const strategyLabel = useMemo(() => {
+    switch (betInfo.strategyUsed) {
+      case "mini_paroli":
+        return "Mini-Paroli";
+      case "dalembert":
+        return "d'Alembert";
+      case "flat":
+        return "Flat";
+      default:
+        return betInfo.strategyUsed || session?.bettingStrategy || "Flat";
+    }
+  }, [betInfo.strategyUsed, session?.bettingStrategy]);
 
   // Strategy Calculation Effect
   useEffect(() => {
@@ -56,15 +78,13 @@ export default function Session() {
 
     // Calculate payout
     let payout = 0;
-    const bet = session.unitSize;
+    const bet = currentBet;
     
     if (result === "WIN") payout = bet;
     else if (result === "BLACKJACK") payout = Math.floor(bet * 1.5); // Simplified 3:2
     else if (result === "LOSS") payout = -bet;
     else if (result === "SURRENDER") payout = -Math.floor(bet * 0.5);
     // PUSH is 0
-
-    const newBankroll = session.currentBankroll + payout;
 
     createHand({
       sessionId,
@@ -77,8 +97,6 @@ export default function Session() {
       result,
     }, {
       onSuccess: () => {
-        // Optimistically update local session bankroll if needed, or rely on invalidation
-        updateSession({ id: sessionId, currentBankroll: newBankroll });
         resetHand();
       }
     });
@@ -88,7 +106,6 @@ export default function Session() {
     setDealerCard(null);
     setPlayerCards([]);
     setActiveInput("dealer");
-    setShowResultInput(false);
   };
 
   if (isLoadingSession) return <div className="min-h-screen flex items-center justify-center text-white">Loading...</div>;
@@ -105,6 +122,9 @@ export default function Session() {
           <span className="text-xs text-muted-foreground uppercase tracking-widest">{session.location}</span>
           <div className="flex items-center gap-1 font-mono font-bold text-green-400">
             <Wallet className="w-4 h-4" /> ${session.currentBankroll.toLocaleString()}
+          </div>
+          <div className="text-[11px] text-muted-foreground">
+            Next bet: ${currentBet.toLocaleString()} ({strategyLabel})
           </div>
         </div>
         <button 
@@ -176,12 +196,12 @@ export default function Session() {
           {/* Context indicator */}
           <div className="flex justify-between items-center text-xs text-muted-foreground px-2">
              <span>{activeInput === 'dealer' ? 'Select Dealer Card' : 'Select Player Cards'}</span>
-             <span>Hand #{hands ? hands.length + 1 : 1}</span>
+             <span>Hand #{hands ? hands.length + 1 : 1} • Next bet ${currentBet}</span>
           </div>
 
           {/* Result Buttons - Show when strategy available */}
           {strategy?.recommendation && (
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-5 gap-2">
                <button 
                   onClick={() => handleResult("WIN")} 
                   disabled={isRecording}
@@ -213,6 +233,14 @@ export default function Session() {
                >
                  <DollarSign className="w-6 h-6" />
                  <span className="text-xs font-bold">BJ</span>
+               </button>
+               <button 
+                  onClick={() => handleResult("SURRENDER")} 
+                  disabled={isRecording}
+                  className="bg-slate-600/20 hover:bg-slate-600/30 text-slate-200 border border-slate-500/50 rounded-lg p-3 flex flex-col items-center gap-1 transition-all active:scale-95"
+               >
+                 <X className="w-6 h-6" />
+                 <span className="text-xs font-bold">Surrender</span>
                </button>
             </div>
           )}

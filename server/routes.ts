@@ -3,31 +3,7 @@ import type { Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
-
-// Basic Strategy Engine (Simplified for MVP)
-function calculateStrategy(dealerCard: string, playerCards: string[], rules: any): "HIT" | "STAND" | "DOUBLE" | "SPLIT" | "SURRENDER" {
-    // Basic simplified logic - placeholder for full engine
-    // Convert cards to values
-    const getValue = (c: string) => {
-        if (['J', 'Q', 'K'].includes(c)) return 10;
-        if (c === 'A') return 11;
-        return parseInt(c);
-    };
-
-    const playerTotal = playerCards.reduce((sum, c) => sum + getValue(c), 0);
-    const dealerVal = getValue(dealerCard);
-    
-    // Very naive basic strategy for MVP demonstration
-    if (playerTotal >= 17) return "STAND";
-    if (playerTotal <= 11) return "HIT";
-    if (playerTotal === 12 && dealerVal >= 4 && dealerVal <= 6) return "STAND";
-    if (playerTotal >= 12 && playerTotal <= 16) {
-        if (dealerVal >= 7) return "HIT";
-        return "STAND";
-    }
-
-    return "HIT";
-}
+import { calculateStrategy } from "./strategy";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -134,11 +110,8 @@ export async function registerRoutes(
         const input = api.strategy.calculate.input.parse(req.body);
         const ruleset = await storage.getRuleset(input.rulesetId);
         
-        const recommendation = calculateStrategy(input.dealerUpCard, input.playerCards, ruleset);
-        
         res.json({
-            recommendation,
-            reasoning: "Basic strategy calculation"
+            ...calculateStrategy(input.dealerUpCard, input.playerCards, ruleset)
         });
       } catch (err) {
          if (err instanceof z.ZodError) {
@@ -162,8 +135,12 @@ async function seed() {
             name: "Generic 6-Deck H17",
             decks: 6,
             isH17: true,
+            doubleRule: "any_two",
             canDoubleAfterSplit: true,
-            canSurrender: false,
+            maxSplitHands: 4,
+            resplitAces: false,
+            hitSplitAces: false,
+            surrender: "late",
             blackjackPayout: "3:2"
         });
     }
