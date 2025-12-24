@@ -3,6 +3,7 @@ import { useSessions } from "@/hooks/use-sessions";
 import { Plus, History, Trophy, ArrowRight } from "lucide-react";
 import { motion } from "framer-motion";
 import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 
 export default function Home() {
   const { data: sessions, isLoading } = useSessions();
