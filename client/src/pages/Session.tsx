@@ -150,9 +150,9 @@ export default function Session() {
       {/* Main Game Area */}
       <main className="flex-1 p-4">
         {/* Hands + Advice Row */}
-        <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] gap-3 items-start">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] gap-2 items-start">
           {/* Dealer Area */}
-          <section className="flex flex-col items-center justify-center space-y-2 min-h-[140px] sm:max-w-[160px]">
+          <section className="flex flex-col items-center justify-center space-y-2 min-h-[140px] max-w-[160px] min-w-0">
             <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Dealer</span>
             <div onClick={() => setActiveInput("dealer")}>
               {dealerCard ? (
@@ -167,8 +167,8 @@ export default function Session() {
           </section>
 
           {/* Strategy Display - Center */}
-          <section className="flex items-center justify-center sm:justify-center">
-            <div className="w-28 sm:w-32">
+          <section className="flex items-center justify-center min-w-0">
+            <div className="w-24 sm:w-28 md:w-32">
               {dealerCard && playerCards.length >= 2 ? (
                 <StrategyCard 
                   recommendation={strategy?.recommendation || null} 
@@ -185,7 +185,7 @@ export default function Session() {
           </section>
 
           {/* Player Area */}
-          <section className="flex flex-col items-center space-y-2 sm:max-w-[200px]">
+          <section className="flex flex-col items-center space-y-2 max-w-[200px] min-w-0">
             <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Player</span>
             <div className="flex flex-wrap justify-center gap-2 sm:gap-3 min-h-[120px]">
               {playerCards.map((card, i) => (
@@ -241,7 +241,7 @@ export default function Session() {
                 </button>
               </div>
 
-              <CardInput onSelect={handleCardSelect} disabled={false} />
+              <CardInput onSelect={handleCardSelect} disabled={false} compact />
 
               {/* Result Buttons - Show when strategy available */}
               {strategy?.recommendation && (
